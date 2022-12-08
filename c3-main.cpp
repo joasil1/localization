@@ -83,6 +83,8 @@ void Accuate(ControlState response, cc::Vehicle::Control& state){
 
 		}
 	}
+	std::cout << "Throttle " << state.throttle << std::endl; // making sure throttle is correct
+
 	state.steer = min( max(state.steer+response.s, -1.0f), 1.0f);
 	state.brake = response.b;
 }
@@ -132,7 +134,7 @@ Eigen::Matrix4d ICP(PointCloudT::Ptr target, PointCloudT::Ptr source, Pose start
 #define FOV_H 360 // deg
 #define FOV_V 48 // deg
 #define FOV_UPPER 16 // deg
-#define ROTATION_RATE 10 // Hz
+#define ROTATION_RATE 50 // Hz
 #define RANGE 30 // m
 //
 #define FOV_LOWER FOV_UPPER-FOV_V // deg
@@ -190,19 +192,28 @@ int main(){
 
 	lidar->Listen([&new_scan, &lastScanTime, &scanCloud](auto data){
 
+		// if I'm processing scan then I don't listen.
+		// 
 		if(new_scan){
+			std::cout << "listenning" << std::endl;
+
 			auto scan = boost::static_pointer_cast<csd::LidarMeasurement>(data);
 			for (auto detection : *scan){
 				if((detection.point.x*detection.point.x + detection.point.y*detection.point.y + detection.point.z*detection.point.z) > 8.0){ // Don't include points touching ego
 					pclCloud.points.push_back(PointT(detection.point.x, detection.point.y, detection.point.z));
 				}
 			}
-			if(pclCloud.points.size() > 0.5*POINTS_SCAN){ // CANDO: Can modify this value to get different scan resolutions
+			if(pclCloud.points.size() > 0.2*POINTS_SCAN){ // CANDO: Can modify this value to get different scan resolutions
 				lastScanTime = std::chrono::system_clock::now();
 				*scanCloud = pclCloud;
 				new_scan = false;
 				std::cout << "NEW SCAN" << std::endl;
 			}
+		}
+		else
+		{
+			std::cout << "still processing..." << std::endl;
+
 		}
 	});
 	
@@ -252,7 +263,7 @@ int main(){
 			voxGrid.filter (*cloudFiltered);
 
 			// TODO: Find pose transform by using ICP or NDT matching
-			auto transform = ICP(mapCloud, cloudFiltered, pose, 30);
+			auto transform = ICP(mapCloud, cloudFiltered, pose, 15);
 			pose = getPose(transform);
 
 			// TODO: Transform scan so it aligns with ego's actual pose and render that scan
